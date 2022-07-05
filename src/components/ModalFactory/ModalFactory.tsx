@@ -2,41 +2,64 @@
 import React from 'react';
 import {EVENT_TYPES, useModal} from '../../hooks/useModal';
 import Modal, {ModalProps} from 'react-native-modal';
-import {DeviceEventEmitter} from 'react-native';
+import {DeviceEventEmitter, NativeEventEmitter, View} from 'react-native';
+
+interface State {
+  isVisible: boolean;
+  component: React.ReactNode;
+  props: Partial<ModalProps>;
+}
+
+const initialState: State = {
+  isVisible: false,
+  component: null,
+  props: {},
+};
+
+const reducer = (state = initialState, action: React.ReducerAction) => {
+  switch (action.type) {
+    case EVENT_TYPES.OPEN:
+      return {
+        ...action.payload,
+        isVisible: true,
+      };
+    case EVENT_TYPES.CLOSE:
+      return {...state, isVisible: false};
+    default:
+      return state;
+  }
+};
 
 export const ModalFactory = () => {
-  const modal = useModal();
-  const [modalComponent, setModalComponent] = React.useState<{
-    component: React.FC<any> | null;
-    props: ModalProps | {};
-  }>({
-    component: null,
-    props: {},
-  });
+  const [state, dispatch] = React.useReducer(reducer, initialState);
 
   const onModalOpen = (component: React.FC<any>, props: ModalProps) => {
-    console.log('ON_MODAL_OPEN');
-    setModalComponent({
-      component,
-      props,
+    dispatch({
+      type: EVENT_TYPES.OPEN,
+      payload: {
+        component,
+        props,
+      },
     });
   };
 
-  const onModalClose = () => {
-    modalComponent.props?.onModalHide?.();
+  const onModalHide = () => {
+    dispatch({
+      type: EVENT_TYPES.CLOSE,
+    });
   };
 
   React.useEffect(() => {
-    DeviceEventEmitter.addListener(EVENT_TYPES.OPEN, onModalOpen);
+    const eventEmitter = new NativeEventEmitter();
+
+    eventEmitter.addListener(EVENT_TYPES.OPEN, onModalOpen);
+
+    eventEmitter.addListener(EVENT_TYPES.CLOSE, onModalHide);
   }, []);
 
-  React.useEffect(() => {
-    DeviceEventEmitter.addListener(EVENT_TYPES.CLOSE, onModalClose);
-  }, [modalComponent]);
-
   return (
-    <Modal {...modalComponent.props} visible={!!modalComponent.component}>
-      {modalComponent.component ? modalComponent.component : <></>}
+    <Modal {...state.props} isVisible={state.isVisible}>
+      {state.component ? state.component : <></>}
     </Modal>
   );
 };
